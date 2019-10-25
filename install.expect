@@ -1,0 +1,112 @@
+#!/usr/bin/expect --
+# Author: Jakub Filak <jakub.filak@sap.com>
+#
+# This script should make automation of ABAP Trial installation simple.
+# The script was designed for installations in Docker and expects
+# the installation sources in the directory /var/tmp/ABAP_Trial
+
+
+set optPassword --password
+set optAcceptLicense --accept-SAP-developer-license
+
+proc usage_and_exit {status} {
+    global optPassword
+    global optAcceptLicense
+
+    puts "Usage: $::argv0 \[-h|--help\] $optPassword PASSWORD $optAcceptLicense"
+    exit $status
+}
+
+if {$argc == 0} {
+    usage_and_exit 1
+}
+
+set password ""
+set accepted "no"
+
+set i 0
+while {$i < $argc} {
+    set opt_arg [lindex $argv $i]
+    switch -- $opt_arg \
+        $optPassword {
+            incr i
+            if {$i >= $argc} {
+                puts stderr "Missing value of the option --password"
+                usage_and_exit 3
+            }
+
+            set password [lindex $argv $i]
+        } \
+        $optAcceptLicense {
+            set accepted "yes"
+        } \
+        -h - \
+        --help {
+            usage_and_exit 0
+        } \
+        default {
+            puts "Illegal option: $opt_arg"
+            usage_and_exit 2
+        }
+
+    incr i
+}
+
+if {$accepted == "no"} {
+    puts stderr "License was not accepted"
+    usage_and_exit 4
+}
+
+if {$password == ""} {
+    puts stderr "Password was not provided"
+    usage_and_exit 5
+}
+
+set timeout 5
+spawn bash /var/tmp/ABAP_Trial/install.sh
+
+set status 10
+expect {
+    "Do you agree to the above license terms? yes/no:" {
+        send "yes\n"
+    }
+
+    timeout { exit [expr $status + 1] }
+    eof     { exit [expr $status + 2] }
+}
+
+set status 20
+expect {
+    "Please enter a password:" {
+        send "$password\n"
+    }
+
+    timeout { exit [expr $status + 1] }
+    eof     { exit [expr $status + 2] }
+}
+
+set status 30
+expect {
+    "Please re-enter password for verification:" {
+        send "$password\n"
+    }
+
+    timeout { exit [expr $status + 1] }
+    eof     { exit [expr $status + 2] }
+}
+
+set status 40
+expect {
+    "extracting data archives..." { }
+
+    timeout { exit [expr $status + 1] }
+    eof     { exit [expr $status + 2] }
+}
+
+set timeout 7200
+
+set status 50
+expect {
+    timeout { exit [expr $status + 1] }
+    eof { exit 0 }
+}

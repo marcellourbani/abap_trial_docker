@@ -1,0 +1,2 @@
+#!/bin/sh
+docker run -d  -h vhcalnplci --dns-search mine.local --name nw75204 nw752_04 tail -f /dev/null
