@@ -1,2 +1,2 @@
 #!/bin/sh
-docker run -d  -h vhcalnplci --dns-search mine.local --name nw75204 nw752_04 tail -f /dev/null
+docker run -d --stop-timeout 1200 --dns-search abap.local -p 3200:3200 -p 3300:3300 -p 8000:8000 -p 44300:44300 --name abaptrial --hostname vhcalnplci asabaptrial catatonit /usr/local/bin/runsapinstance

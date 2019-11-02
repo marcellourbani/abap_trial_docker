@@ -1,19 +1,22 @@
 FROM opensuse/leap:latest
-RUN zypper --non-interactive install --replacefiles uuid uuidd hostname wget expect unrar tcsh tar which net-tools iproute2 gzip libaio1
-RUN zypper --non-interactive install --replacefiles vim iputils
-RUN mkdir /run/uuidd && chown uuidd /var/run/uuidd && /usr/sbin/uuidd
-COPY install.expect /usr/local/bin
-COPY ABAP_Trial /var/tmp/ABAP_Trial
+LABEL hostname="vhalnplci"
+COPY patches/* /
+RUN zypper --non-interactive install --replacefiles \
+    uuid uuidd hostname wget expect tcsh tar which net-tools iproute2 gzip libaio1 vim iputils catatonit \
+    curl python-openssl python-pip && \
+    chown uuidd /var/run/uuidd 
 
-RUN HOSTNAME=`uname -n`;\
-    sed "s/\($HOSTNAME\)/vhcalnplci/" /etc/hosts > /tmp/hosts ;\
-    cat /tmp/hosts > /etc/hosts; rm /tmp/hosts;\
-    echo vhcalnplci >/etc/hostname;\
-    hostname vhcalnplci;\
-    /usr/local/bin/install.expect --password "S3cr3tP@ssw0rd" --accept-SAP-developer-license;\
-    su - npladm -c "stopsap ALL"
+COPY patches.tgz /root/
+RUN cd /;tar xzf /root/patches.tgz;rm /root/patches.tgz
+
+# Install PyRFC and run installation
+RUN pip install --upgrade pip && \
+    cd /var/tmp &&\
+    curl -LO https://github.com/SAP/PyRFC/releases/download/1.9.99/pyrfc-1.9.99-cp27-cp27mu-linux_x86_64.whl&& \
+    pip install  /var/tmp/pyrfc-1.9.99-cp27-cp27mu-linux_x86_64.whl && \
+    rm -f /var/tmp/pyrfc-1.9.99-cp27-cp27mu-linux_x86_64.whl
+
 EXPOSE 8000
 EXPOSE 44300
-EXPOSE 4237
 EXPOSE 3300
 EXPOSE 3200

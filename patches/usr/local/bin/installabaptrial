@@ -1,0 +1,49 @@
+#!/bin/sh
+fixhost() {
+  if grep -q '^[^#]*vhcalnplci\.abap.local' /etc/hosts; then
+    echo no need to patch /etc/hosts
+  else
+    sed 's/\(vhcalnplci\)/\1.abap.local \1/' /etc/hosts >~/hosts
+    cat ~/hosts >/etc/hosts
+    rm ~/hosts
+    echo patched /etc/hosts
+  fi
+
+  if grep -q '^domain\s*abap.local' /etc/resolv.conf; then
+    echo no need to patch /etc/resolv.conf
+  else
+    echo 'domain abap.local' >>/etc/resolv.conf
+    echo patched /etc/resolv.conf
+  fi
+}
+
+installcertificates() {
+  (
+    export LD_LIBRARY_PATH=/sapmnt/NPL/exe/uc/linuxx86_64
+    python /usr/local/bin/sap_add_trusted_server_cert -v /etc/pki/ca-trust/source/SAP/*.cer >/dev/null 2>&1
+  )
+}
+
+fixhost
+uuidd
+/usr/local/bin/install.expect --password "S3cr3tP@ssw0rd" --accept-SAP-developer-license
+su npladm -c 'sapcontrol -nr 0 -function GetSystemInstanceList>/dev/null'
+retcode=$?
+if [ $retcode -eq 0 ]; then
+  for i in 1 2 3 4 5; do
+    echo "Installing certificates, attempt $i"
+    if installcertificates; then
+      echo "Installation successful"
+      break
+    else
+      if [ $i -lt 5 ]; then
+        echo "Failed, retrying in 10 seconds"
+        sleep 10
+      else
+        echo "failed permanently"
+      fi
+    fi
+  done
+fi
+su npladm -c stopsap
+exit $retcode

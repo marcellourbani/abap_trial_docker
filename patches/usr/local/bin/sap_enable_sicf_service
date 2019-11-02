@@ -1,0 +1,155 @@
+#!/usr/bin/env python
+"""
+Enables SICF HTTP services
+"""
+
+import copy
+import base64
+import logging
+from argparse import ArgumentParser
+
+from pyrfc import Connection
+
+
+class SICFError(Exception):
+    """Base exception for errors of this tool"""
+
+    pass
+
+
+# pylint: disable=too-few-public-methods
+class SecretValue(object):
+    """Pseudo secure store for values that should not be stored in memory in
+       their plain form.
+       It is not secure at all, it just prevents accidental displaying of
+       secret values in stack traces in print outs by keeping the value in
+       non-plain bytes.
+    """
+
+    def __init__(self, value):
+        self._value = base64.b64encode(value[::-1])
+
+    def decode(self):
+        """Returns secret value in plain format"""
+
+        return base64.b64decode(self._value)[::-1]
+
+
+# pylint: disable=too-few-public-methods
+class ConnectionDetails(object):
+    """SAP Connection details"""
+
+    # pylint: disable=too-many-arguments
+    def __init__(self, ashost, sysnr, client, user, passwd, sid=None):
+        """Initialize the crate for SAP connection details.
+
+           user - an instance of SecretValue
+           passwd - an instance of SecretValue
+        """
+
+        self._params = {
+            'ashost': ashost,
+            'sysnr': sysnr,
+            'client': client,
+        }
+
+        if sid is not None:
+            self._params['sid'] = sid
+
+        self._user = user
+        self._passwd = passwd
+
+    def __eq__(self, other):
+        return (
+            self._params == other._params and
+            self._user._value == other._user._value and
+            self._passwd._value == other._passwd._value)
+
+    def __repr__(self):
+        return '{user} in {sidorhost}/{client}'.format(
+            sidorhost=self._params.get('sid', self._params['ashost']),
+            user=self._user.decode(),
+            **self._params)
+
+    def __str__(self):
+        return repr(self)
+
+    def to_params(self):
+        """Dictionary with keys that correspond to parameter names of
+           pyrfc.Connection constructor
+        """
+
+        params = copy.deepcopy(self._params)
+        params['user'] = self._user.decode()
+        params['passwd'] = self._passwd.decode()
+
+        return params
+
+
+def _do_rfc_call(conn, function, parameters):
+    """Simple wrapper to be able to print useful information
+       for all RFC calls.
+    """
+
+    logging.debug('RFC BEGIN: %s <- %s', function, parameters)
+    response = conn.call(function, **parameters)
+    logging.debug('RFC END  : %s -> %s', function, response)
+    return response
+
+
+def enable_sicf_services(conn_spec, urls):
+    """Enables SICF HTTP Service
+    """
+
+    with Connection(**conn_spec.to_params()) as conn:
+        logging.info('Successfully connected: %s', repr(conn_spec))
+
+        for url in urls:
+            logging.debug('Enabling: %s', url)
+            _do_rfc_call(conn, 'HTTP_ACTIVATE_NODE', {'URL': url})
+
+
+def _main(argv):
+    arg_parser = ArgumentParser(
+        description='Enable HTTP endpoints')
+    arg_parser.add_argument(
+        '--ashost', dest='ashost', type=str, default='localhost',
+        help='Application Server address (DNS or IP)')
+    arg_parser.add_argument(
+        '--sid', dest='sid', type=str, default='NPL',
+        help='System ID (SID)')
+    arg_parser.add_argument(
+        '--client', dest='client', type=str, default='001',
+        help='Client (MANDT)')
+    arg_parser.add_argument(
+        '--sysnr', dest='sysnr', type=str, default='00',
+        help='System Number')
+    arg_parser.add_argument(
+        '--user', dest='user', type=str, default='DEVELOPER',
+        help='Logon user')
+    arg_parser.add_argument(
+        '--passwd', dest='passwd', type=str, default='Down1oad',
+        help='Logon user')
+    arg_parser.add_argument(
+        '-v', '--verbose', dest='verbose', action='count', default=0,
+        help='Logon user')
+    arg_parser.add_argument(
+        'urls', metavar='URLS', type=str, nargs='+',
+        help='SICF Services URLs')
+
+    args = arg_parser.parse_args(argv)
+
+    log_level = logging.ERROR - args.verbose * 10
+    logging.getLogger().setLevel(log_level if log_level >= 0 else 0)
+
+    conn_spec = ConnectionDetails(
+        ashost=args.ashost, sysnr=args.sysnr, sid=args.sid, client=args.client,
+        user=SecretValue(args.user), passwd=SecretValue(args.passwd))
+
+    enable_sicf_services(conn_spec, args.urls)
+
+
+if __name__ == '__main__':
+    import sys
+
+    _main(sys.argv[1:])

@@ -1,0 +1,34 @@
+#!/bin/sh
+_term(){
+  echo stopping instance
+  echo
+  su npladm -c stopsap
+  echo "instance stopped, killing wating process $child"
+  kill -9 "$child" 2>/dev/null
+}
+fixhost(){
+  if grep -q '^[^#]*vhcalnplci\.abap.local' /etc/hosts;then
+    echo no need to patch /etc/hosts
+  else
+    sed 's/\(vhcalnplci\)/\1.abap.local \1/' /etc/hosts >~/hosts
+    cat ~/hosts >/etc/hosts
+    rm ~/hosts
+    echo patched /etc/hosts
+  fi
+
+  if grep -q '^domain\s*abap.local' /etc/resolv.conf;then
+    echo no need to patch /etc/resolv.conf
+  else
+    echo 'domain abap.local' >>/etc/resolv.conf
+    echo patched /etc/resolv.conf
+  fi
+}
+trap _term SIGTERM
+
+fixhost
+uuidd
+su npladm -c startsap
+tail -f /dev/null &
+child=$!
+echo "Instance started. waiting on PID $child"
+wait "$child"
