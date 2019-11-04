@@ -1,13 +1,18 @@
 FROM opensuse/leap:latest
 LABEL hostname="vhalnplci"
-COPY patches/* /
+
+RUN mkdir -p etc/pki/ca-trust/source/SAP
+COPY patches/usr/local/bin/* /usr/local/bin/
+COPY patches/etc/pki/ca-trust/source/SAP/* /etc/pki/ca-trust/source/SAP/
+
 RUN zypper --non-interactive install --replacefiles \
     uuid uuidd hostname wget expect tcsh tar which net-tools iproute2 gzip libaio1 vim iputils catatonit \
     curl python-openssl python-pip && \
+    mkdir /var/run/uuidd && \
     chown uuidd /var/run/uuidd 
 
-COPY patches.tgz /root/
-RUN cd /;tar xzf /root/patches.tgz;rm /root/patches.tgz
+# COPY patches.tgz /root/
+# RUN cd /;tar xzf /root/patches.tgz;rm /root/patches.tgz
 
 # Install PyRFC and run installation
 RUN pip install --upgrade pip && \

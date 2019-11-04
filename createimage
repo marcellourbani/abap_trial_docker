@@ -1,9 +1,8 @@
 #!/bin/sh
 start_docker() {
-  docker run -it -h vh --dns-search abap.local -v $PWD/ABAP_Trial:/var/tmp/ABAP_Trial \
+  docker run -it --dns-search abap.local -v $PWD/ABAP_Trial:/var/tmp/ABAP_Trial \
     --name abaptmp --hostname vhcalnplci asabaptrial_tmp catatonit /usr/local/bin/installabaptrial
 }
-tar czf patches.tgz -C patches .
 docker build -t asabaptrial_tmp .
 
 if start_docker; then
